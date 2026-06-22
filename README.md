@@ -12,6 +12,27 @@ KINESIS is a self-organizing agent federation built on Terminal 3's TEE-verified
 
 ---
 
+## 🎬 Demo Video
+
+> **[▶ Watch the KINESIS Demo](https://youtu.be/kinesis-lattice-demo)**
+
+The demo video shows:
+1. **Lattice startup** — 5 TEE-verified agents spawn with `did:t3n` identities
+2. **Coherence computation** — live five-plane behavioral scoring (Π·Φ·Σ·Κ·Α)
+3. **Delegation graph** — force-directed visualization of trust relationships forming
+4. **Structured Silence** — an agent drops below threshold Δ(t) and enters silence
+5. **Lattice recovery** — silent agent's remediation path and delegation revocation
+6. **Moat growth** — Λ(t) compounding curve demonstrating unforgeable trust history
+
+**Run the demo yourself in 2 commands:**
+```bash
+cd agent-runtime && npm install && npm run build
+MOCK_DATA_FOR_DEMO=true DEMO_AGENT_COUNT=5 node dist/index.js
+# Dashboard at http://localhost:8080
+```
+
+---
+
 ## What We Built
 
 KINESIS inverts the traditional agent delegation paradigm: instead of humans issuing static credentials to agents, **agents earn trust through demonstrated behavioral coherence** across five TEE-verified dimensions. The lattice itself becomes the authority — self-healing, self-governing, and exponentially harder to manipulate as it grows.
@@ -55,8 +76,8 @@ KINESIS inverts the traditional agent delegation paradigm: instead of humans iss
 ```
 Ξ(a,t) = 0.30·Π(a,t) + 0.25·Φ(a,t) + 0.20·Σ(a,t) + 0.15·Κ(a,t) + 0.10·Α(a,t)
 
-Δ(t)   = Δ_min + (Δ_max − Δ_min) · V(t)      — dynamic threshold
-Λ(t)   = f(D, Q, R, N, F)                     — compounding lattice moat
+Δ(t)   = Δ_min + (Δ_max − Δ_min) · V(t)      — dynamic threshold adapts to volatility
+Λ(t)   = f(D, Q, R, N, F)                     — compounding lattice moat (unforgeable)
 
 Delegation approved iff: Ξ(delegator) ≥ Δ(t) AND Ξ(delegatee) ≥ Δ(t)
                          AND graph-invariants(lattice + new_edge) = true
@@ -101,13 +122,10 @@ kinesis-lattice/
 │       ├── federation/a2a-protocol.ts  # A2A + Web Bot Auth
 │       ├── lattice/         # CoherenceEngine + Orchestrator + Agent
 │       └── tee-bridge/      # TEE contract client
-├── dashboard/               # Next.js 14 Real-Time Dashboard
-│   └── src/components/
-│       ├── lattice/         # LatticeGraph (canvas) + CoherenceHeatmap
-│       └── metrics/         # MetricsStrip + MoatCurve + SilenceFeed
+│   └── public/index.html    # ← Standalone demo UI (no framework needed)
 ├── sdk/                     # @kinesis/lattice-sdk
 │   └── src/                 # KinesisAgent, LatticeClient, CoherenceEngine
-├── scripts/                 # Demo + deployment scripts
+├── scripts/demo/            # Demo runner scripts
 ├── tests/integration/       # E2E lifecycle tests
 └── docs/                    # Architecture + submission docs
 ```
@@ -128,26 +146,40 @@ kinesis-lattice/
 git clone https://github.com/dev-analyshd/kinesis-lattice.git
 cd kinesis-lattice
 
-# Install + build
-npm run bootstrap
+# Install runtime dependencies
+cd agent-runtime && npm install
+
+# Build
+npm run build
 
 # Run with 5 mock agents
-npm run demo
+MOCK_DATA_FOR_DEMO=true DEMO_AGENT_COUNT=5 node dist/index.js
 
-# Dashboard: http://localhost:8080
-# API health: http://localhost:8080/health
-# WebSocket:  ws://localhost:8080
+# Or use the root convenience script:
+cd .. && npm run demo
 ```
+
+**Then open:** `http://localhost:8080` — interactive lattice dashboard
+
+Endpoints:
+- `GET  /health`                          — system health + agent count
+- `GET  /.well-known/agent.json`          — A2A Agent Card
+- `GET  /api/v1/lattice/topology`         — full lattice state
+- `GET  /api/v1/agents`                   — all agent profiles
+- `POST /api/v1/agents/spawn`             — spawn a new agent
+- `POST /api/v1/delegations`              — create delegation
+- `GET  /api/v1/lattice/silences`         — silence registry
+- `WS   ws://localhost:8080`              — real-time topology stream
 
 ### Live Mode (Terminal 3 TEE)
 
 ```bash
-# Set your T3N API key
-cp .env.example .env
-# Edit .env — add T3N_API_KEY
+# Set your T3N credentials
+export T3N_API_KEY=0x...your-api-key...
+export T3N_DID=did:t3n:your-did
+export MOCK_DATA_FOR_DEMO=false
 
-# Run with real TEE identity
-MOCK_DATA_FOR_DEMO=false node agent-runtime/dist/index.js
+node agent-runtime/dist/index.js
 ```
 
 ### SDK Usage

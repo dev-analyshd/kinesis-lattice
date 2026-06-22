@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { LatticeGraph } from '@/components/lattice/LatticeGraph';
 import { CoherenceHeatmap } from '@/components/lattice/CoherenceHeatmap';
 import { MetricsStrip } from '@/components/metrics/MetricsStrip';
@@ -38,174 +38,95 @@ interface Edge {
 interface LatticeTopology {
   agents: Agent[];
   edges: Edge[];
+  delegations?: Edge[];
   moat: number;
   volatility: number;
   activeSilences: number;
 }
 
-const PLANES = ['protocol', 'fidelity', 'synergy', 'knowledge', 'adaptivity'] as const;
-const JURISDICTIONS = ['us-east-1', 'eu-west-2', 'ap-south-1', 'us-west-2', 'sa-east-1'];
-const AGENT_NAMES = ['nexus-alpha', 'arbiter-7', 'sentinel-3', 'relay-omega', 'cortex-9', 'herald-2', 'praxis-phi', 'axiom-x'];
-
-function rand(min: number, max: number) {
-  return Math.random() * (max - min) + min;
+function getWsUrl(): string {
+  const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${proto}//${window.location.host}/ws`;
 }
 
-function clamp(v: number, min = 0, max = 1) {
-  return Math.max(min, Math.min(max, v));
-}
-
-function generateInitialAgents(count: number): Agent[] {
-  return Array.from({ length: count }, (_, i) => {
-    const planes = {
-      protocol: rand(0.55, 0.98),
-      fidelity: rand(0.55, 0.98),
-      synergy: rand(0.55, 0.98),
-      knowledge: rand(0.55, 0.98),
-      adaptivity: rand(0.55, 0.98),
-    };
-    const composite = 0.30 * planes.protocol + 0.25 * planes.fidelity + 0.20 * planes.synergy + 0.15 * planes.knowledge + 0.10 * planes.adaptivity;
-    const threshold = 0.62;
-    const isSilent = composite < threshold;
-    return {
-      id: `agent-${i}`,
-      name: AGENT_NAMES[i % AGENT_NAMES.length],
-      did: `did:kinesis:${Math.random().toString(36).slice(2, 10)}`,
-      coherence: {
-        composite,
-        threshold,
-        isSilent,
-        planes,
-        limitingPlane: isSilent ? PLANES[Math.floor(Math.random() * PLANES.length)] : undefined,
-        deficit: isSilent ? threshold - composite : undefined,
-      },
-      isSilent,
-      jurisdiction: JURISDICTIONS[i % JURISDICTIONS.length],
-      totalActions: Math.floor(rand(10, 500)),
-    };
-  });
-}
-
-function generateEdges(agents: Agent[]): Edge[] {
-  const edges: Edge[] = [];
-  for (let i = 0; i < agents.length; i++) {
-    const targets = Math.floor(rand(1, 3));
-    for (let t = 0; t < targets; t++) {
-      const j = (i + 1 + Math.floor(rand(0, agents.length - 1))) % agents.length;
-      if (i !== j) {
-        edges.push({ from: agents[i].id, to: agents[j].id, weight: rand(0.3, 1.0) });
-      }
-    }
-  }
-  return edges;
-}
-
-function evolveAgents(agents: Agent[]): Agent[] {
-  return agents.map(agent => {
-    const drift = 0.015;
-    const planes = {
-      protocol: clamp(agent.coherence!.planes.protocol + rand(-drift, drift)),
-      fidelity: clamp(agent.coherence!.planes.fidelity + rand(-drift, drift)),
-      synergy: clamp(agent.coherence!.planes.synergy + rand(-drift, drift)),
-      knowledge: clamp(agent.coherence!.planes.knowledge + rand(-drift, drift)),
-      adaptivity: clamp(agent.coherence!.planes.adaptivity + rand(-drift, drift)),
-    };
-    const composite = 0.30 * planes.protocol + 0.25 * planes.fidelity + 0.20 * planes.synergy + 0.15 * planes.knowledge + 0.10 * planes.adaptivity;
-    const threshold = 0.62;
-    const isSilent = composite < threshold;
-    const limitingPlane = isSilent
-      ? (Object.entries(planes).sort(([, a], [, b]) => a - b)[0][0] as string)
-      : undefined;
-    return {
-      ...agent,
-      isSilent,
-      coherence: {
-        composite,
-        threshold,
-        isSilent,
-        planes,
-        limitingPlane,
-        deficit: isSilent ? threshold - composite : undefined,
-      },
-      totalActions: agent.totalActions + Math.floor(rand(0, 3)),
-    };
-  });
+function getApiUrl(path: string): string {
+  return `/api/v1${path}`;
 }
 
 export default function Dashboard() {
   const [topology, setTopology] = useState<LatticeTopology | null>(null);
   const [moatHistory, setMoatHistory] = useState<{ time: number; moat: number }[]>([]);
   const [silenceEvents, setSilenceEvents] = useState<string[]>([]);
-  const agentsRef = useRef<Agent[]>([]);
-  const moatRef = useRef(rand(0.3, 0.5));
-  const spawnCountRef = useRef(0);
+  const [wsStatus, setWsStatus] = useState<'connecting' | 'live' | 'reconnecting'>('connecting');
+  const wsRef = useRef<WebSocket | null>(null);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const tick = useCallback(() => {
-    if (agentsRef.current.length === 0) {
-      agentsRef.current = generateInitialAgents(5);
-    } else {
-      agentsRef.current = evolveAgents(agentsRef.current);
-    }
+  const connectWs = useCallback(() => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
-    const agents = agentsRef.current;
-    const edges = generateEdges(agents);
-    const silentAgents = agents.filter(a => a.isSilent);
-    const avgCoherence = agents.reduce((s, a) => s + (a.coherence?.composite ?? 0), 0) / agents.length;
+    setWsStatus('connecting');
+    const ws = new WebSocket(getWsUrl());
+    wsRef.current = ws;
 
-    moatRef.current = clamp(moatRef.current + rand(-0.002, 0.005), 0, 1);
-
-    const volatility = agents.reduce((s, a) => {
-      const vals = Object.values(a.coherence?.planes ?? {});
-      const mean = vals.reduce((x, v) => x + v, 0) / vals.length;
-      return s + vals.reduce((x, v) => x + Math.abs(v - mean), 0) / vals.length;
-    }, 0) / agents.length;
-
-    const topo: LatticeTopology = {
-      agents,
-      edges,
-      moat: moatRef.current,
-      volatility,
-      activeSilences: silentAgents.length,
+    ws.onopen = () => {
+      setWsStatus('live');
     };
 
-    setTopology(topo);
-    setMoatHistory(prev => [...prev.slice(-59), { time: Date.now(), moat: moatRef.current }]);
+    ws.onmessage = (evt) => {
+      try {
+        const msg = JSON.parse(evt.data) as { type: string; data: LatticeTopology };
+        if (msg.type === 'topology' && msg.data) {
+          const data = msg.data;
+          const edges = data.edges || data.delegations || [];
+          const topo: LatticeTopology = { ...data, edges };
+          setTopology(topo);
+          setMoatHistory(prev => [...prev.slice(-59), { time: Date.now(), moat: data.moat }]);
 
-    if (silentAgents.length > 0) {
-      const eventStr = `${new Date().toLocaleTimeString()}: ${silentAgents.map(a => a.name).join(', ')} entered silence`;
-      setSilenceEvents(prev => [eventStr, ...prev.slice(0, 19)]);
-    }
+          const silentAgents = (data.agents || []).filter(a => a.isSilent);
+          if (silentAgents.length > 0) {
+            const eventStr = `${new Date().toLocaleTimeString()}: ${silentAgents.map(a => a.name).join(', ')} in structured silence`;
+            setSilenceEvents(prev => [eventStr, ...prev.slice(0, 19)]);
+          }
+        }
+      } catch {
+        // ignore parse errors
+      }
+    };
+
+    ws.onclose = () => {
+      setWsStatus('reconnecting');
+      reconnectTimerRef.current = setTimeout(connectWs, 3000);
+    };
+
+    ws.onerror = () => {
+      ws.close();
+    };
   }, []);
 
   useEffect(() => {
-    tick();
-    const id = setInterval(tick, 2000);
-    return () => clearInterval(id);
-  }, [tick]);
+    connectWs();
+    return () => {
+      wsRef.current?.close();
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+    };
+  }, [connectWs]);
 
-  const spawnAgent = () => {
-    spawnCountRef.current += 1;
-    const idx = AGENT_NAMES.length + spawnCountRef.current;
-    const planes = {
-      protocol: rand(0.6, 0.95),
-      fidelity: rand(0.6, 0.95),
-      synergy: rand(0.6, 0.95),
-      knowledge: rand(0.6, 0.95),
-      adaptivity: rand(0.6, 0.95),
-    };
-    const composite = 0.30 * planes.protocol + 0.25 * planes.fidelity + 0.20 * planes.synergy + 0.15 * planes.knowledge + 0.10 * planes.adaptivity;
-    const threshold = 0.62;
-    const newAgent: Agent = {
-      id: `agent-spawned-${idx}`,
-      name: `agent-${Date.now().toString(36).slice(-4)}`,
-      did: `did:kinesis:${Math.random().toString(36).slice(2, 10)}`,
-      coherence: { composite, threshold, isSilent: false, planes },
-      isSilent: false,
-      jurisdiction: JURISDICTIONS[Math.floor(Math.random() * JURISDICTIONS.length)],
-      totalActions: 0,
-    };
-    agentsRef.current = [...agentsRef.current, newAgent];
+  const spawnAgent = async () => {
+    try {
+      const res = await fetch(getApiUrl('/agents/spawn'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mockData: true }),
+      });
+      const data = await res.json();
+      if (!data.success) console.warn('Spawn failed', data.error);
+    } catch (err) {
+      console.error('Failed to spawn agent', err);
+    }
   };
+
+  const statusColor = wsStatus === 'live' ? '#00f5c4' : wsStatus === 'reconnecting' ? '#f59e0b' : '#6b7280';
+  const statusLabel = wsStatus === 'live' ? 'LATTICE LIVE' : wsStatus === 'reconnecting' ? 'RECONNECTING' : 'CONNECTING';
 
   return (
     <div className="min-h-screen bg-[#0a0f1e] text-[#e2e8f0] font-mono">
@@ -216,10 +137,16 @@ export default function Dashboard() {
         </div>
         <div className="flex items-center gap-6 text-xs">
           <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-[#00f5c4] lattice-pulse" />
-            <span className="text-[#00f5c4]">LATTICE LIVE</span>
+            <div
+              className="w-2 h-2 rounded-full"
+              style={{ backgroundColor: statusColor, boxShadow: `0 0 6px ${statusColor}` }}
+            />
+            <span style={{ color: statusColor }}>{statusLabel}</span>
           </div>
-          <div className="text-[#6b7280]">Updated: {new Date().toLocaleTimeString()}</div>
+          <div className="text-[#4b5563] text-xs">
+            {topology ? `${topology.agents.length} agents · ${topology.edges.length} edges` : 'Waiting for data...'}
+          </div>
+          <div className="text-[#6b7280]">T3N TEE ✓</div>
           <button
             onClick={spawnAgent}
             className="px-3 py-1 border border-[#00f5c4] text-[#00f5c4] text-xs rounded hover:bg-[#00f5c4] hover:text-[#0a0f1e] transition-colors"
@@ -239,7 +166,7 @@ export default function Dashboard() {
           transition={{ duration: 0.4 }}
         >
           <div className="text-xs text-[#6b7280] mb-3 uppercase tracking-widest">
-            Lattice Topology — Delegation Graph
+            Lattice Topology — Delegation Graph · did:t3n: anchored
           </div>
           <LatticeGraph topology={topology} />
         </motion.div>
@@ -284,7 +211,7 @@ export default function Dashboard() {
       </div>
 
       <footer className="border-t border-[#1e2d3d] px-6 py-3 text-center text-xs text-[#6b7280]">
-        KINESIS v0.1.0 · Terminal 3 TEE Infrastructure · Trust is earned, not given. The lattice remembers.
+        KINESIS v0.1.0 · Terminal 3 TEE Infrastructure · T3N Agent Auth SDK · Trust is earned, not given. The lattice remembers.
       </footer>
     </div>
   );

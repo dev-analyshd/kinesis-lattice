@@ -190,6 +190,12 @@ importers:
       pino-http:
         specifier: ^10.5.0
         version: 10.5.0
+      uuid:
+        specifier: ^14.0.1
+        version: 14.0.1
+      ws:
+        specifier: ^8.21.0
+        version: 8.21.0
     devDependencies:
       '@types/cookie-parser':
         specifier: ^1.4.10
@@ -203,6 +209,12 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 25.6.2
+      '@types/uuid':
+        specifier: ^11.0.0
+        version: 11.0.0
+      '@types/ws':
+        specifier: ^8.18.1
+        version: 8.18.1
       esbuild:
         specifier: 0.27.3
         version: 0.27.3
@@ -2715,6 +2727,13 @@ packages:
 
   '@types/unist@3.0.3':
     resolution: {integrity: sha512-ko/gIFJRv177XgZsZcBwnqJN5x/Gien8qNOn0D5bQU/zAzVf9Zt3BlcUiLqhV9y4ARk0GbT3tnUiPNgnTXzc/Q==}
+
+  '@types/uuid@11.0.0':
+    resolution: {integrity: sha512-HVyk8nj2m+jcFRNazzqyVKiZezyhDKrGUA3jlEcg/nZ6Ms+qHwocba1Y/AaVaznJTAM9xpdFSh+ptbNrhOGvZA==}
+    deprecated: This is a stub types definition. uuid provides its own type definitions, so you do not need this installed.
+
+  '@types/ws@8.18.1':
+    resolution: {integrity: sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==}
 
   '@types/yargs-parser@21.0.3':
     resolution: {integrity: sha512-I4q9QU9MQv4oEOz4tAHJtNz1cwuLxn2F3xcc2iV5WdqLPpUnj30aUuxt1mAxYTG+oe8CZMV/+6rU4S4gRDzqtQ==}
@@ -5589,6 +5608,7 @@ packages:
   tsconfck@3.1.6:
     resolution: {integrity: sha512-ks6Vjr/jEw0P1gmOVwutM3B7fWxoWBL2KRDb1JfqGVawBmO5UsvmWOQFGHBPl5yxYz4eERr19E6L7NMv+Fej4w==}
     engines: {node: ^18 || >=20}
+    deprecated: unmaintained
     hasBin: true
     peerDependencies:
       typescript: ^5.0.0
@@ -5735,6 +5755,10 @@ packages:
   utils-merge@1.0.1:
     resolution: {integrity: sha512-pMZTvIkT1d+TFGvDOqodOclx0QWkkgi6Tdoa8gC8ffGAAqz9pzPTZWAybbsHHoED/ztMtkv/VoYTYyShUn81hA==}
     engines: {node: '>= 0.4.0'}
+
+  uuid@14.0.1:
+    resolution: {integrity: sha512-6ZxzVpzDXDa3bJWaHilVayA+BH/1zmxCJoVgvmqJnid/gPoKHxUrS/aC/T6LGQtNHT+XHG9fXPJB4d+IrU30Ew==}
+    hasBin: true
 
   uuid@3.4.0:
     resolution: {integrity: sha512-HjSDRw6gZE5JMggctHBcjVak08+KEVhSIiDzFnT9S9aegmp85S/bReBVTb4QTFaRNptJ9kuYaNhnbNEOkbKb/A==}
@@ -8701,6 +8725,14 @@ snapshots:
 
   '@types/unist@3.0.3': {}
 
+  '@types/uuid@11.0.0':
+    dependencies:
+      uuid: 14.0.1
+
+  '@types/ws@8.18.1':
+    dependencies:
+      '@types/node': 25.6.2
+
   '@types/yargs-parser@21.0.3': {}
 
   '@types/yargs@17.0.35':
@@ -10490,7 +10522,7 @@ snapshots:
   metro-source-map@0.83.3:
     dependencies:
       '@babel/traverse': 7.29.0
-      '@babel/traverse--for-generate-function-map': '@babel/traverse@7.29.0'
+      '@babel/traverse--for-generate-function-map': '@babel/traverse@7.29.7'
       '@babel/types': 7.29.0
       flow-enums-runtime: 0.0.6
       invariant: 2.2.4
@@ -11971,6 +12003,8 @@ snapshots:
   util-deprecate@1.0.2: {}
 
   utils-merge@1.0.1: {}
+
+  uuid@14.0.1: {}
 
   uuid@3.4.0: {}
 

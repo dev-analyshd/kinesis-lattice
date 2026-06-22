@@ -14,7 +14,7 @@ KINESIS is a self-organizing agent federation built on Terminal 3's TEE-verified
 
 ## 🎬 Demo Video
 
-> **[▶ Watch the KINESIS Demo](https://youtu.be/kinesis-lattice-demo)**
+> **[▶ Watch the KINESIS Demo](https://youtu.be/73C2kbbj2Xo?si=NQJVd-ZA-EwwVy8m)**
 
 The demo video shows:
 1. **Lattice startup** — 5 TEE-verified agents spawn with `did:t3n` identities

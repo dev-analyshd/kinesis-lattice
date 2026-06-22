@@ -89,20 +89,28 @@ class T3nClient {
   /**
    * Authenticate with an Ethereum signature, establishing did:t3n identity.
    * Real: submits EthAuth to T3N testnet; returns TEE-attested DID.
+   *
+   * If T3N_DID env var is set, returns the canonical DID for that account
+   * (matches what the real SDK returns for the same API key).
    */
   async authenticate(authInput) {
     if (!this._sessionId) throw new Error('Call handshake() before authenticate()');
 
     const { address, nonce } = authInput;
-    const didHash = crypto
-      .createHash('sha256')
-      .update(address + nonce + currentEnvironment)
-      .digest('hex')
-      .slice(0, 40);
 
-    this._did = `did:t3n:${currentEnvironment}:${didHash}`;
+    // Use canonical DID from env if available (matches real SDK output)
+    if (process.env.T3N_DID) {
+      this._did = process.env.T3N_DID;
+    } else {
+      const didHash = crypto
+        .createHash('sha256')
+        .update(address + nonce + currentEnvironment)
+        .digest('hex')
+        .slice(0, 40);
+      this._did = `did:t3n:${currentEnvironment}:${didHash}`;
+    }
+
     this._authenticated = true;
-
     console.log(`[t3n-sdk-mock] Authenticated: ${this._did}`);
     return { did: this._did, sessionId: this._sessionId };
   }

@@ -312,6 +312,40 @@
       <div class="log" id="event-log"></div>
     </div>
   </div>
+
+  <!-- Attack Simulation Row -->
+  <div class="bottom-row" style="margin-top:12px">
+    <div class="panel" style="grid-column:1/-1">
+      <div class="panel-title" style="display:flex;justify-content:space-between;align-items:center">
+        <span>⚔ Adversarial Attack Simulator — Live Security Proof</span>
+        <span id="attack-status" style="color:var(--muted);font-size:10px">Ready</span>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+        <button class="spawn-btn" onclick="runAttack('run')" style="background:linear-gradient(135deg,#7c3aed,#a855f7)">
+          ⚔ Full Suite (6 vectors)
+        </button>
+        <button class="spawn-btn" onclick="runAttack('sybil')" style="background:linear-gradient(135deg,#1e40af,#3b82f6)">
+          ⚠ Sybil Flood
+        </button>
+        <button class="spawn-btn" onclick="runAttack('centralize')" style="background:linear-gradient(135deg,#b45309,#f59e0b)">
+          ⚠ Centralization
+        </button>
+        <button class="spawn-btn" onclick="runAttack('ring')" style="background:linear-gradient(135deg,#9d174d,#ec4899)">
+          ⚠ Collusion Ring
+        </button>
+        <button class="spawn-btn" onclick="runAttack('silence')" style="background:linear-gradient(135deg,#be123c,#f43f5e)">
+          ⚠ Silence Bypass
+        </button>
+      </div>
+      <div id="attack-results" style="display:none">
+        <div id="attack-verdict" style="font-size:14px;font-weight:bold;margin-bottom:10px;padding:8px;border-radius:4px;background:#0a0f1e"></div>
+        <div id="attack-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px"></div>
+      </div>
+      <div id="attack-loading" style="display:none;color:var(--muted);padding:8px">
+        ⏳ Running attack simulation against live lattice...
+      </div>
+    </div>
+  </div>
 </div>
 
 <div class="equation">
@@ -950,6 +984,92 @@ function startOfflineDemo() {
   // Start immediately then loop
   pushTopology();
   setInterval(pushTopology, 2000);
+}
+
+// ── Attack Simulation ─────────────────────────────────────────
+async function runAttack(type) {
+  const loading = document.getElementById('attack-loading');
+  const results = document.getElementById('attack-results');
+  const statusEl = document.getElementById('attack-status');
+
+  loading.style.display = 'block';
+  results.style.display = 'none';
+  statusEl.textContent = 'Running...';
+  statusEl.style.color = 'var(--warn)';
+
+  addLog(`⚔ Attack simulation started: ${type}`, 'warn');
+
+  try {
+    const res = await fetch(`/api/v1/attack-sim/${type}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const report = data.report;
+
+    loading.style.display = 'none';
+    results.style.display = 'block';
+
+    // Summary
+    const isIntact = (report.overallIntegrity || report.latticeIntegrity) === 'intact';
+    const verdict = report.verdict || (isIntact ? '🛡 LATTICE IMPENETRABLE — All attacks blocked' : '⚠ Some attacks partially succeeded');
+    const verdictEl = document.getElementById('attack-verdict');
+    verdictEl.textContent = verdict;
+    verdictEl.style.borderLeft = `4px solid ${isIntact ? 'var(--accent)' : 'var(--warn)'}`;
+    verdictEl.style.color = isIntact ? 'var(--accent)' : 'var(--warn)';
+
+    // Grid of individual attack results
+    const grid = document.getElementById('attack-grid');
+    grid.innerHTML = '';
+    const attackResults = report.results || [report];
+    attackResults.forEach(r => {
+      const intact = r.latticeIntegrity === 'intact';
+      const card = document.createElement('div');
+      card.style.cssText = `
+        padding:10px;border-radius:6px;
+        background:#0a0f1e;
+        border:1px solid ${intact ? 'var(--accent)' : r.latticeIntegrity === 'degraded' ? 'var(--warn)' : 'var(--danger)'};
+      `;
+      const pct = r.attemptsBlocked + r.attemptsSucceeded > 0
+        ? Math.round(r.attemptsBlocked / (r.attemptsBlocked + r.attemptsSucceeded) * 100)
+        : 100;
+      card.innerHTML = `
+        <div style="font-weight:bold;font-size:11px;color:${intact ? 'var(--accent)' : 'var(--warn)'};margin-bottom:4px">
+          ${intact ? '🛡' : '⚠'} ${r.attackType}
+        </div>
+        <div style="color:var(--muted);font-size:10px;margin-bottom:6px">${r.description}</div>
+        <div style="display:flex;gap:12px;margin-bottom:6px">
+          <span style="color:var(--accent);font-size:11px">✓ Blocked: ${r.attemptsBlocked}</span>
+          <span style="color:${r.attemptsSucceeded > 0 ? 'var(--danger)' : 'var(--muted)'};font-size:11px">
+            ${r.attemptsSucceeded > 0 ? '⚠' : '✓'} Succeeded: ${r.attemptsSucceeded}
+          </span>
+        </div>
+        <div style="height:4px;background:#1e2d3d;border-radius:2px">
+          <div style="height:100%;width:${pct}%;background:${intact ? 'var(--accent)' : 'var(--warn)'};border-radius:2px;transition:width 0.5s"></div>
+        </div>
+        <div style="color:var(--muted);font-size:9px;margin-top:4px">${pct}% blocked · ${r.detectionTime}ms</div>
+      `;
+      grid.appendChild(card);
+    });
+
+    const blocked = report.totalBlocked ?? report.attemptsBlocked ?? 0;
+    const total = (report.totalAttacks ?? (report.attemptsBlocked + report.attemptsSucceeded)) || 0;
+    statusEl.textContent = `${blocked}/${total} attacks blocked`;
+    statusEl.style.color = isIntact ? 'var(--accent)' : 'var(--warn)';
+    addLog(`⚔ Simulation complete: ${blocked}/${total} blocked — ${report.overallIntegrity || report.latticeIntegrity}`, isIntact ? 'success' : 'warn');
+  } catch (err) {
+    loading.style.display = 'none';
+    statusEl.textContent = 'Failed (server offline?)';
+    statusEl.style.color = 'var(--danger)';
+    addLog(`⚔ Attack sim failed: ${err.message}`, 'error');
+    // Fallback: show demo result
+    results.style.display = 'block';
+    document.getElementById('attack-verdict').textContent = '🛡 [DEMO] LATTICE IMPENETRABLE — Run live server to see real results';
+    document.getElementById('attack-verdict').style.cssText = 'font-size:14px;font-weight:bold;color:var(--muted);padding:8px;background:#0a0f1e;border-left:4px solid var(--muted)';
+    document.getElementById('attack-grid').innerHTML = '';
+  }
 }
 
 // ── Start ─────────────────────────────────────────────────────

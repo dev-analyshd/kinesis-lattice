@@ -824,11 +824,144 @@ async function checkHealth() {
   } catch(e) {}
 }
 
+// ── Offline demo mode ─────────────────────────────────────────
+// When no server is running, generate synthetic lattice data so the
+// dashboard still renders beautifully for screen-recording / demo video.
+function makeMockAgent(i) {
+  const names = [
+    'trading-oracle','risk-sentinel','compliance-warden',
+    'data-curator','settlement-broker','id-verifier',
+    'audit-witness','bridge-relay','policy-enforcer','market-maker'
+  ];
+  const jurisdictions = ['US','EU','SG','JP','UK','CA','AU','IN','BR','AE'];
+  const c = i === 1 ? 0.48 : 0.62 + Math.random() * 0.30;
+  const threshold = 0.60 + Math.random() * 0.15;
+  const silent = c < threshold;
+  const planes = {
+    protocol: i === 1 ? 0.30 : 0.70 + Math.random() * 0.28,
+    fidelity: 0.60 + Math.random() * 0.38,
+    synergy:  i === 1 ? 0.25 : 0.55 + Math.random() * 0.40,
+    knowledge: 0.50 + Math.random() * 0.40,
+    adaptivity: 0.45 + Math.random() * 0.45,
+  };
+  const id = 'mock-' + Math.random().toString(36).slice(2, 10);
+  return {
+    id, name: names[i % names.length],
+    did: `did:t3n:mock:${id}`,
+    jurisdiction: jurisdictions[i % jurisdictions.length],
+    isSilent: silent,
+    totalActions: 10 + Math.floor(Math.random() * 60),
+    delegationOut: [], delegationIn: [],
+    registeredAt: Date.now() - Math.floor(Math.random() * 3600000),
+    coherence: {
+      agentId: id, timestamp: Date.now(),
+      planes, composite: c, threshold,
+      isSilent: silent,
+      limitingPlane: silent ? 'synergy' : undefined,
+      deficit: silent ? threshold - c : undefined,
+    }
+  };
+}
+
+let offlineMode = false;
+let mockTick = 0;
+
+function startOfflineDemo() {
+  if (offlineMode) return;
+  offlineMode = true;
+  document.getElementById('conn-dot').className = 'dot';
+  document.getElementById('conn-dot').style.background = 'var(--warn)';
+  document.getElementById('conn-status').textContent = 'OFFLINE DEMO';
+  document.querySelector('.tee-badge').innerHTML = '⚙ TEE: <span style="color:var(--warn)">DEMO</span>';
+  addLog('No server found — entering offline demo mode', 'warn');
+  addLog('Open http://localhost:8080 with the runtime for live data', 'info');
+
+  // Build initial topology
+  const agents = Array.from({ length: 6 }, (_, i) => makeMockAgent(i));
+  const edges = [];
+  for (let i = 0; i < agents.length - 1; i++) {
+    if (!agents[i].isSilent && !agents[i+1].isSilent) {
+      edges.push({
+        from: agents[i].id, to: agents[i+1].id,
+        weight: agents[i].coherence.composite,
+        issuedAt: Date.now() - 120000, expiresAt: Date.now() + 604800000,
+      });
+    }
+  }
+
+  function pushTopology() {
+    mockTick++;
+    // Drift coherence values
+    agents.forEach((a, i) => {
+      if (!a.coherence) return;
+      const delta = (Math.random() - 0.49) * 0.015;
+      a.coherence.composite = Math.max(0.2, Math.min(0.99, a.coherence.composite + delta));
+      a.coherence.planes.protocol  = Math.max(0, Math.min(1, a.coherence.planes.protocol + (Math.random()-0.5)*0.02));
+      a.coherence.planes.fidelity  = Math.max(0, Math.min(1, a.coherence.planes.fidelity + (Math.random()-0.5)*0.015));
+      a.coherence.planes.synergy   = Math.max(0, Math.min(1, a.coherence.planes.synergy + (Math.random()-0.5)*0.02));
+      a.coherence.planes.knowledge = Math.max(0, Math.min(1, a.coherence.planes.knowledge + (Math.random()-0.5)*0.01));
+      a.coherence.planes.adaptivity= Math.max(0, Math.min(1, a.coherence.planes.adaptivity + (Math.random()-0.5)*0.02));
+      a.coherence.isSilent = a.coherence.composite < a.coherence.threshold;
+      a.isSilent = a.coherence.isSilent;
+      a.totalActions += Math.floor(Math.random() * 2);
+
+      // Occasional log events
+      if (mockTick % 6 === i) {
+        if (a.isSilent)
+          addLog(`${a.name} entered STRUCTURED SILENCE (Ξ=${a.coherence.composite.toFixed(3)})`, 'warn');
+        else if (mockTick % 12 === i)
+          addLog(`${a.name} action: Ξ=${a.coherence.composite.toFixed(3)}`, 'info');
+      }
+    });
+
+    // Occasionally add/remove edges
+    if (mockTick % 7 === 0) {
+      const from = agents[Math.floor(Math.random() * agents.length)];
+      const to   = agents[Math.floor(Math.random() * agents.length)];
+      if (from.id !== to.id && !from.isSilent && !to.isSilent) {
+        const exists = edges.find(e => e.from === from.id && e.to === to.id);
+        if (!exists && edges.length < 12) {
+          edges.push({ from: from.id, to: to.id, weight: from.coherence.composite,
+            issuedAt: Date.now(), expiresAt: Date.now() + 604800000 });
+          addLog(`Delegation: ${from.name} → ${to.name}`, 'success');
+        }
+      }
+    }
+
+    const activeSilences = agents.filter(a => a.isSilent).length;
+    const moat = 0.1 + (mockTick / 500) + Math.sin(mockTick * 0.1) * 0.02;
+    const coherences = agents.map(a => a.coherence?.composite || 0.5);
+    const mean = coherences.reduce((a,b)=>a+b,0)/coherences.length;
+    const variance = coherences.reduce((s,c)=>s+Math.pow(c-mean,2),0)/coherences.length;
+    const volatility = Math.min(1, Math.sqrt(variance) / mean);
+
+    topology = { agents, edges, moat, volatility, activeSilences };
+    moatHistory.push({ t: Date.now(), moat });
+    if (moatHistory.length > 60) moatHistory.shift();
+
+    updateMetrics();
+    updateAgentList();
+    updateSilenceFeed();
+    updateMoatChart();
+    document.getElementById('last-update').textContent =
+      'Demo tick: ' + mockTick;
+  }
+
+  // Start immediately then loop
+  pushTopology();
+  setInterval(pushTopology, 2000);
+}
+
 // ── Start ─────────────────────────────────────────────────────
 connect();
 drawLattice();
 checkHealth();
 setInterval(checkHealth, 30000);
+
+// Fall back to offline demo if WebSocket fails after 4 seconds
+setTimeout(() => {
+  if (!topology) startOfflineDemo();
+}, 4000);
 
 // Add initial log entries
 addLog('KINESIS lattice dashboard initialized', 'success');

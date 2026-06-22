@@ -1,0 +1,7 @@
+{
+  "name": "@terminal3/t3n-sdk",
+  "version": "3.4.4",
+  "description": "Terminal 3 TEE SDK — local mock for demo/testing",
+  "main": "index.js",
+  "types": "index.d.ts"
+}

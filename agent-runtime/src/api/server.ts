@@ -1,10 +1,11 @@
-import express, { Request, Response } from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import { WebSocketServer, WebSocket } from 'ws';
 import { createServer } from 'http';
 import cors from 'cors';
 import { LatticeOrchestrator } from '../lattice/orchestrator';
 import { KinesisAgent } from '../lattice/agent';
 import { A2AProtocol } from '../federation/a2a-protocol';
+import { attackSimRouter } from './routes/attack-sim';
 import { logger } from '../utils/logger';
 
 const app = express();
@@ -140,6 +141,13 @@ app.delete('/api/v1/delegations', async (req: Request, res: Response) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
+
+// ── Adversarial Attack Simulation ───────────────────────────────────────────
+// Inject orchestrator into request context for isolated sim orchestrators
+app.use('/api/v1/attack-sim', (req: Request, _res, next: NextFunction) => {
+  (req as any).orchestrator = orchestrator;
+  next();
+}, attackSimRouter);
 
 // ── Lattice State ───────────────────────────────────────────────────────────
 app.get('/api/v1/lattice/topology', (_req: Request, res: Response) => {

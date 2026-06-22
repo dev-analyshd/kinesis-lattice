@@ -133,9 +133,11 @@ export class CoherenceEngine {
   /**
    * Κ(a,t) — Knowledge plane: domain expertise depth.
    * Hard-zero condition: stagnation > 30 days.
+   * No data (0 milestones, 0 stagnation) → neutral 0.5.
    */
   private computeKnowledgeScore(milestones: number, stagnationDays: number): number {
     if (stagnationDays > 30) return 0; // Hard-zero: stagnation
+    if (milestones === 0 && stagnationDays === 0) return 0.5; // No data → neutral
     const base = Math.min(1, milestones * 0.1);
     const decay = Math.min(1, stagnationDays / 30);
     return Math.max(0, base * (1 - decay * 0.5));
@@ -144,9 +146,11 @@ export class CoherenceEngine {
   /**
    * Α(a,t) — Adaptivity plane: environmental response quality.
    * Hard-zero condition: behavioral z-score > 3σ (erratic).
+   * No data (0 shifts, 0 z-score) → neutral 0.5.
    */
   private computeAdaptivityScore(shifts: number, zScore: number): number {
     if (Math.abs(zScore) > 3) return 0; // Hard-zero: erratic
+    if (shifts === 0 && zScore === 0) return 0.5; // No data → neutral
     const base = Math.min(1, shifts * 0.05);
     const penalty = Math.min(1, Math.abs(zScore) / 3);
     return Math.max(0, base * (1 - penalty * 0.3));
@@ -169,19 +173,29 @@ export class CoherenceEngine {
     return THRESHOLD_MIN + (THRESHOLD_MAX - THRESHOLD_MIN) * v;
   }
 
-  /** Identify which plane is dragging the composite below threshold. */
+  /**
+   * Identify which plane is most limiting — the one with the highest
+   * weight-adjusted deficit (weight × (1 − score)).
+   * This tells the agent where to invest remediation effort for maximum gain.
+   */
   private detectLimitingPlane(
     p: number, f: number, s: number, k: number, a: number
   ): string | null {
-    const scores = [
-      { name: 'protocol', score: p },
-      { name: 'fidelity', score: f },
-      { name: 'synergy', score: s },
-      { name: 'knowledge', score: k },
-      { name: 'adaptivity', score: a },
+    const planes = [
+      { name: 'protocol',   score: p, weight: W_PROTOCOL   },
+      { name: 'fidelity',   score: f, weight: W_FIDELITY   },
+      { name: 'synergy',    score: s, weight: W_SYNERGY     },
+      { name: 'knowledge',  score: k, weight: W_KNOWLEDGE   },
+      { name: 'adaptivity', score: a, weight: W_ADAPTIVITY  },
     ];
-    const min = scores.reduce((a, b) => a.score < b.score ? a : b);
-    return min.score < 0.3 ? min.name : null;
+    // Weighted deficit = weight × (1 − score). Higher = more impactful to fix.
+    const worst = planes.reduce((best, cur) => {
+      const curDeficit = cur.weight * (1 - cur.score);
+      const bestDeficit = best.weight * (1 - best.score);
+      return curDeficit > bestDeficit ? cur : best;
+    });
+    // Only report limiting plane when below 0.5 (meaningfully dragging composite)
+    return worst.score < 0.5 ? worst.name : null;
   }
 
   /** Generate a structured silence record with remediation guidance. */

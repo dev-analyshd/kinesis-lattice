@@ -179,7 +179,7 @@ export class KinesisAgent {
   /** Compute behavioral z-score for the adaptivity plane. */
   private computeZScore(): number {
     if (this.actionLog.length < 10) return 0;
-    const recent = this.actionLog.slice(-10).map(a => a.outcome ? 1 : 0);
+    const recent: number[] = this.actionLog.slice(-10).map(a => a.outcome ? 1 : 0);
     const mean = recent.reduce((a, b) => a + b, 0) / recent.length;
     const variance = recent.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / recent.length;
     const std = Math.sqrt(variance);

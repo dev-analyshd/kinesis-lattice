@@ -21,6 +21,9 @@ app.use(cors({
   methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
 }));
 
+// Serve the interactive demo UI at root
+app.use(express.static('public'));
+
 // ── Health ──────────────────────────────────────────────────────────────────
 app.get('/health', (_req: Request, res: Response) => {
   res.json({
@@ -34,12 +37,14 @@ app.get('/health', (_req: Request, res: Response) => {
 });
 
 // ── A2A Agent Card (RFC: /.well-known/agent.json) ───────────────────────────
-app.get('/.well-known/agent.json', (_req: Request, res: Response) => {
+app.get('/.well-known/agent.json', (req: Request, res: Response) => {
+  const host = req.headers.host || `localhost:${process.env.API_PORT || 8080}`;
+  const proto = req.headers['x-forwarded-proto'] || 'http';
   const card = a2aProtocol.buildAgentCard(
     'kinesis-core',
     '0.1.0',
     process.env.T3N_DID || 'did:t3n:testnet:kinesis-core',
-    `https://${req.hostname}/api/v1`,
+    `${proto}://${host}/api/v1`,
   );
   res.json(card);
 });
@@ -56,6 +61,12 @@ app.post('/api/v1/agents/spawn', async (req: Request, res: Response) => {
     await agent.spawn();
     await agent.joinLattice();
     orchestrator.registerAgent(agent);
+
+    // Give new agent some initial behavioral history
+    const successRate = 0.65 + Math.random() * 0.3;
+    for (let i = 0; i < 5 + Math.floor(Math.random() * 8); i++) {
+      await agent.performAction(`init-action-${i}`, Math.random() < successRate);
+    }
 
     res.json({
       success: true,
@@ -164,13 +175,11 @@ const PORT = parseInt(process.env.API_PORT || '8080', 10);
 server.listen(PORT, () => {
   logger.info(`KINESIS API Server running`, {
     port: PORT,
+    dashboard: `http://localhost:${PORT}`,
     health: `http://localhost:${PORT}/health`,
     agentCard: `http://localhost:${PORT}/.well-known/agent.json`,
+    topology: `http://localhost:${PORT}/api/v1/lattice/topology`,
   });
 });
-
-// fix: Request has hostname in express
-function req_fix() { const req: any = {}; req.hostname = 'localhost'; return req; }
-const req = req_fix();
 
 export { app, server };

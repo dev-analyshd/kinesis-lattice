@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KINESIS — The Living Delegation Lattice</title>
+<style>
+  :root {
+    --bg: #0a0f1e;
+    --panel: #0f1928;
+    --border: #1e2d3d;
+    --accent: #00f5c4;
+    --accent2: #38bdf8;
+    --accent3: #a78bfa;
+    --warn: #ffbb28;
+    --danger: #ff4d4d;
+    --muted: #6b7280;
+    --text: #e2e8f0;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+    font-size: 13px;
+    overflow-x: hidden;
+    min-height: 100vh;
+  }
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--panel); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* Header */
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--panel);
+  }
+  .logo { color: var(--accent); font-size: 20px; font-weight: bold; letter-spacing: 3px; }
+  .tagline { color: var(--muted); font-size: 11px; margin-left: 12px; }
+  .status-badge {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11px; padding: 4px 10px;
+    border: 1px solid var(--border); border-radius: 4px;
+  }
+  .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent);
+    animation: pulse 2s ease-in-out infinite;
+  }
+  .dot.offline { background: var(--danger); animation: none; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  /* Metrics strip */
+  .metrics {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+    overflow-x: auto;
+  }
+  .metric {
+    flex: 0 0 auto;
+    padding: 10px 20px;
+    border-right: 1px solid var(--border);
+    text-align: center;
+    min-width: 120px;
+  }
+  .metric-label { color: var(--muted); font-size: 9px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+  .metric-value { font-size: 22px; font-weight: bold; }
+  .metric-value.green { color: var(--accent); }
+  .metric-value.blue { color: var(--accent2); }
+  .metric-value.purple { color: var(--accent3); }
+  .metric-value.yellow { color: var(--warn); }
+  .metric-value.red { color: var(--danger); }
+
+  /* Main grid */
+  .grid { display: grid; grid-template-columns: 1fr 420px; gap: 12px; padding: 12px; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+  }
+  .panel-title {
+    color: var(--muted); font-size: 10px;
+    text-transform: uppercase; letter-spacing: 2px;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* Canvas */
+  #lattice-canvas {
+    width: 100%;
+    border-radius: 4px;
+    background: transparent;
+    cursor: crosshair;
+  }
+
+  /* Right column */
+  .right-col { display: flex; flex-direction: column; gap: 12px; }
+
+  /* Agent list */
+  .agent-list { max-height: 280px; overflow-y: auto; }
+  .agent-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 10px; margin-bottom: 4px;
+    border: 1px solid var(--border); border-radius: 6px;
+    background: #0a0f1e88;
+    cursor: pointer; transition: border-color 0.2s;
+  }
+  .agent-item:hover { border-color: var(--accent); }
+  .agent-item.silent { border-color: #ff4d4d44; background: #ff4d4d0a; }
+  .agent-did { color: var(--muted); font-size: 9px; margin-top: 2px; }
+  .coherence-bar-container { flex: 1; margin: 0 10px; }
+  .coherence-bar-bg { height: 6px; background: #1e2d3d; border-radius: 3px; overflow: hidden; }
+  .coherence-bar-fill { height: 100%; border-radius: 3px; transition: width 0.5s, background 0.3s; }
+  .coherence-val { font-size: 11px; font-weight: bold; min-width: 40px; text-align: right; }
+
+  /* Plane breakdown */
+  #plane-detail {
+    font-size: 11px;
+    display: none;
+  }
+  #plane-detail.active { display: block; }
+  .plane-row { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+  .plane-name { width: 80px; color: var(--muted); }
+  .plane-bar-bg { flex: 1; height: 8px; background: #1e2d3d; border-radius: 4px; overflow: hidden; }
+  .plane-bar-fill { height: 100%; border-radius: 4px; transition: width 0.5s; }
+  .plane-val { width: 42px; text-align: right; }
+
+  /* Moat chart */
+  #moat-chart { width: 100%; height: 80px; }
+
+  /* Silence feed */
+  .silence-feed { max-height: 120px; overflow-y: auto; font-size: 11px; }
+  .silence-item {
+    padding: 6px 8px; margin-bottom: 4px;
+    border: 1px solid #ff4d4d33; border-radius: 4px;
+    background: #ff4d4d08;
+    animation: slideIn 0.3s ease-out;
+  }
+  @keyframes slideIn { from { opacity:0; transform:translateX(-10px) } to { opacity:1; transform:translateX(0) } }
+  .silence-agent { color: var(--danger); font-weight: bold; }
+  .silence-plane { color: var(--warn); }
+  .silence-empty { color: var(--muted); font-style: italic; }
+
+  /* Equation banner */
+  .equation {
+    text-align: center; padding: 8px;
+    color: var(--accent); font-size: 12px;
+    border-top: 1px solid var(--border);
+    letter-spacing: 1px;
+  }
+
+  /* Spawn button */
+  .spawn-btn {
+    padding: 8px 16px;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    background: transparent;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 12px;
+    transition: all 0.2s;
+  }
+  .spawn-btn:hover { background: var(--accent); color: var(--bg); }
+  .spawn-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* Grid bottom row */
+  .bottom-row { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  /* Log */
+  .log { font-size: 10px; max-height: 100px; overflow-y: auto; }
+  .log-item { padding: 2px 0; border-bottom: 1px solid #1e2d3d33; }
+  .log-item.info { color: var(--accent2); }
+  .log-item.warn { color: var(--warn); }
+  .log-item.error { color: var(--danger); }
+  .log-item.success { color: var(--accent); }
+
+  /* TEE badge */
+  .tee-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 8px; border-radius: 12px;
+    background: #00f5c40f; border: 1px solid #00f5c430;
+    color: var(--accent); font-size: 10px;
+  }
+
+  footer {
+    text-align: center; padding: 10px;
+    color: var(--muted); font-size: 10px;
+    border-top: 1px solid var(--border);
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header>
+  <div style="display:flex;align-items:center">
+    <div class="logo">⬡ KINESIS</div>
+    <div class="tagline">The Living Delegation Lattice · Terminal 3 TEE</div>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px">
+    <span class="tee-badge">⚙ TEE-ATTESTED</span>
+    <div class="status-badge">
+      <div class="dot" id="conn-dot"></div>
+      <span id="conn-status">CONNECTING...</span>
+    </div>
+    <button class="spawn-btn" id="spawn-btn" onclick="spawnAgent()">+ SPAWN AGENT</button>
+  </div>
+</header>
+
+<!-- Metrics Strip -->
+<div class="metrics">
+  <div class="metric"><div class="metric-label">Agents</div><div class="metric-value green" id="m-agents">—</div></div>
+  <div class="metric"><div class="metric-label">Active</div><div class="metric-value blue" id="m-active">—</div></div>
+  <div class="metric"><div class="metric-label">Delegations</div><div class="metric-value purple" id="m-delegations">—</div></div>
+  <div class="metric"><div class="metric-label">Silences</div><div class="metric-value red" id="m-silences">0</div></div>
+  <div class="metric"><div class="metric-label">Avg Ξ(a,t)</div><div class="metric-value green" id="m-coherence">—</div></div>
+  <div class="metric"><div class="metric-label">Moat Λ(t)</div><div class="metric-value yellow" id="m-moat">—</div></div>
+  <div class="metric"><div class="metric-label">Volatility V(t)</div><div class="metric-value" id="m-volatility" style="color:var(--warn)">—</div></div>
+  <div class="metric"><div class="metric-label">Lattice Health</div><div class="metric-value" id="m-health" style="color:var(--accent)">—</div></div>
+</div>
+
+<!-- Main Grid -->
+<div class="grid">
+  <!-- Force-directed lattice graph -->
+  <div class="panel">
+    <div class="panel-title" style="display:flex;justify-content:space-between;align-items:center">
+      <span>⬡ Lattice Topology — Delegation Graph (Force-Directed)</span>
+      <span style="color:var(--accent);font-size:10px" id="last-update"></span>
+    </div>
+    <canvas id="lattice-canvas" width="700" height="440"></canvas>
+  </div>
+
+  <!-- Right column -->
+  <div class="right-col">
+    <!-- Agent list -->
+    <div class="panel">
+      <div class="panel-title">Agent Registry — Click for Five-Plane Detail</div>
+      <div class="agent-list" id="agent-list"></div>
+    </div>
+
+    <!-- Selected agent plane detail -->
+    <div class="panel" id="plane-detail-panel" style="display:none">
+      <div class="panel-title">
+        Five-Plane Coherence: Ξ(a,t) = 0.30·Π + 0.25·Φ + 0.20·Σ + 0.15·Κ + 0.10·Α
+      </div>
+      <div id="plane-detail" class="active">
+        <div class="plane-row">
+          <span class="plane-name" style="color:#00f5c4">Π Protocol</span>
+          <div class="plane-bar-bg"><div class="plane-bar-fill" id="pb-protocol" style="background:#00f5c4"></div></div>
+          <span class="plane-val" id="pv-protocol" style="color:#00f5c4"></span>
+        </div>
+        <div class="plane-row">
+          <span class="plane-name" style="color:#38bdf8">Φ Fidelity</span>
+          <div class="plane-bar-bg"><div class="plane-bar-fill" id="pb-fidelity" style="background:#38bdf8"></div></div>
+          <span class="plane-val" id="pv-fidelity" style="color:#38bdf8"></span>
+        </div>
+        <div class="plane-row">
+          <span class="plane-name" style="color:#a78bfa">Σ Synergy</span>
+          <div class="plane-bar-bg"><div class="plane-bar-fill" id="pb-synergy" style="background:#a78bfa"></div></div>
+          <span class="plane-val" id="pv-synergy" style="color:#a78bfa"></span>
+        </div>
+        <div class="plane-row">
+          <span class="plane-name" style="color:#fbbf24">Κ Knowledge</span>
+          <div class="plane-bar-bg"><div class="plane-bar-fill" id="pb-knowledge" style="background:#fbbf24"></div></div>
+          <span class="plane-val" id="pv-knowledge" style="color:#fbbf24"></span>
+        </div>
+        <div class="plane-row">
+          <span class="plane-name" style="color:#f97316">Α Adaptivity</span>
+          <div class="plane-bar-bg"><div class="plane-bar-fill" id="pb-adaptivity" style="background:#f97316"></div></div>
+          <span class="plane-val" id="pv-adaptivity" style="color:#f97316"></span>
+        </div>
+        <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+          <div id="agent-silence-status"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Moat curve -->
+    <div class="panel">
+      <div class="panel-title">Lattice Moat Λ(t) — Compounding Trust Capital</div>
+      <canvas id="moat-chart" width="400" height="80"></canvas>
+      <div style="color:var(--muted);font-size:10px;margin-top:4px">
+        Behavioral history compounds — harder to fake as the lattice grows
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom row -->
+  <div class="bottom-row">
+    <!-- Silence Registry -->
+    <div class="panel">
+      <div class="panel-title" style="display:flex;justify-content:space-between">
+        <span>⚠ Structured Silence Registry</span>
+        <span id="silence-count" style="color:var(--danger);font-size:10px">0 active</span>
+      </div>
+      <div class="silence-feed" id="silence-feed">
+        <div class="silence-empty">All agents coherent — lattice healthy</div>
+      </div>
+    </div>
+
+    <!-- Event Log -->
+    <div class="panel">
+      <div class="panel-title">Lattice Event Log</div>
+      <div class="log" id="event-log"></div>
+    </div>
+  </div>
+</div>
+
+<div class="equation">
+  Ξ(a,t) = 0.30·Π(protocol) + 0.25·Φ(fidelity) + 0.20·Σ(synergy) + 0.15·Κ(knowledge) + 0.10·Α(adaptivity)
+  &nbsp;·&nbsp;
+  Delegation approved iff Ξ(a,t) ≥ Δ(t) AND graph-invariants hold
+</div>
+
+<footer>
+  KINESIS v0.1.0 · Terminal 3 TEE Infrastructure ·
+  <a href="/.well-known/agent.json" style="color:var(--accent)">Agent Card</a> ·
+  <a href="/api/v1/lattice/topology" style="color:var(--accent)">Topology API</a> ·
+  <a href="/health" style="color:var(--accent)">Health</a>
+</footer>
+
+<script>
+// ─────────────────────────────────────────────────────────────
+// KINESIS Dashboard — Vanilla JS (no framework dependencies)
+// ─────────────────────────────────────────────────────────────
+const WS_URL = `ws://${location.host}`;
+const API_URL = `http://${location.host}`;
+
+let topology = null;
+let moatHistory = [];
+let selectedAgentId = null;
+let frame = 0;
+let ws = null;
+let nodePositions = new Map();
+let nodeVelocities = new Map();
+let eventLog = [];
+
+// ── WebSocket connection ────────────────────────────────────
+function connect() {
+  try {
+    ws = new WebSocket(WS_URL);
+    ws.onopen = () => {
+      document.getElementById('conn-dot').className = 'dot';
+      document.getElementById('conn-status').textContent = 'LATTICE LIVE';
+      addLog('Connected to KINESIS lattice', 'success');
+    };
+    ws.onmessage = (e) => {
+      const msg = JSON.parse(e.data);
+      if (msg.type === 'topology') {
+        topology = msg.data;
+        moatHistory.push({ t: Date.now(), moat: topology.moat });
+        if (moatHistory.length > 60) moatHistory.shift();
+        updateMetrics();
+        updateAgentList();
+        updateSilenceFeed();
+        updateMoatChart();
+        document.getElementById('last-update').textContent =
+          'Updated: ' + new Date().toLocaleTimeString();
+      }
+    };
+    ws.onclose = () => {
+      document.getElementById('conn-dot').className = 'dot offline';
+      document.getElementById('conn-status').textContent = 'RECONNECTING...';
+      setTimeout(connect, 3000);
+    };
+    ws.onerror = () => {};
+  } catch(e) { setTimeout(connect, 3000); }
+}
+
+// ── Metrics strip ────────────────────────────────────────────
+function updateMetrics() {
+  if (!topology) return;
+  const agents = topology.agents;
+  const active = agents.filter(a => !a.isSilent).length;
+  const silences = topology.activeSilences;
+  const avgC = agents.length
+    ? agents.reduce((s,a) => s + (a.coherence?.composite || 0.5), 0) / agents.length
+    : 0;
+
+  document.getElementById('m-agents').textContent = agents.length;
+  document.getElementById('m-active').textContent = active;
+  document.getElementById('m-delegations').textContent = topology.edges.length;
+  document.getElementById('m-silences').textContent = silences;
+  document.getElementById('m-coherence').textContent = avgC.toFixed(3);
+  document.getElementById('m-moat').textContent = topology.moat.toFixed(3);
+  document.getElementById('m-volatility').textContent =
+    (topology.volatility * 100).toFixed(1) + '%';
+  const healthEl = document.getElementById('m-health');
+  if (silences === 0) { healthEl.textContent = 'OPTIMAL'; healthEl.style.color = 'var(--accent)'; }
+  else if (silences <= 1) { healthEl.textContent = 'DEGRADED'; healthEl.style.color = 'var(--warn)'; }
+  else { healthEl.textContent = 'CRITICAL'; healthEl.style.color = 'var(--danger)'; }
+}
+
+// ── Agent list ───────────────────────────────────────────────
+function coherenceColor(c, silent) {
+  if (silent) return 'var(--danger)';
+  if (c >= 0.75) return 'var(--accent)';
+  if (c >= 0.60) return 'var(--warn)';
+  return '#f97316';
+}
+
+function updateAgentList() {
+  if (!topology) return;
+  const container = document.getElementById('agent-list');
+  container.innerHTML = '';
+  topology.agents.forEach(agent => {
+    const c = agent.coherence?.composite ?? 0.5;
+    const color = coherenceColor(c, agent.isSilent);
+    const div = document.createElement('div');
+    div.className = 'agent-item' + (agent.isSilent ? ' silent' : '');
+    div.onclick = () => selectAgent(agent.id);
+    div.innerHTML = `
+      <div style="min-width:100px">
+        <div style="color:${color};font-weight:bold;font-size:11px">${agent.name}</div>
+        <div class="agent-did">${agent.did.substring(0,30)}...</div>
+        <div style="font-size:9px;color:var(--muted)">
+          ${agent.jurisdiction} · ${agent.totalActions} actions
+          ${agent.isSilent ? ' · <span style="color:var(--danger)">SILENT</span>' : ''}
+        </div>
+      </div>
+      <div class="coherence-bar-container">
+        <div class="coherence-bar-bg">
+          <div class="coherence-bar-fill" style="width:${(c*100).toFixed(1)}%;background:${color}"></div>
+        </div>
+      </div>
+      <div class="coherence-val" style="color:${color}">Ξ=${c.toFixed(3)}</div>
+    `;
+    container.appendChild(div);
+  });
+}
+
+// ── Agent plane detail ────────────────────────────────────────
+function selectAgent(id) {
+  selectedAgentId = id;
+  if (!topology) return;
+  const agent = topology.agents.find(a => a.id === id);
+  if (!agent || !agent.coherence) return;
+
+  document.getElementById('plane-detail-panel').style.display = 'block';
+  const planes = agent.coherence.planes;
+  const colors = {
+    protocol: '#00f5c4', fidelity: '#38bdf8',
+    synergy: '#a78bfa', knowledge: '#fbbf24', adaptivity: '#f97316'
+  };
+  ['protocol','fidelity','synergy','knowledge','adaptivity'].forEach(p => {
+    const v = planes[p] || 0;
+    document.getElementById(`pb-${p}`).style.width = (v*100).toFixed(1) + '%';
+    document.getElementById(`pv-${p}`).textContent = (v*100).toFixed(1) + '%';
+  });
+
+  const statusEl = document.getElementById('agent-silence-status');
+  if (agent.isSilent) {
+    statusEl.innerHTML = `
+      <span style="color:var(--danger)">⚠ STRUCTURED SILENCE</span>
+      <div style="color:var(--muted);font-size:10px;margin-top:4px">
+        Limiting plane: <span style="color:var(--warn)">${agent.coherence.limitingPlane || 'composite'}</span><br>
+        Deficit: <span style="color:var(--danger)">-${(agent.coherence.deficit||0).toFixed(4)}</span>
+        vs threshold Δ(t) = ${agent.coherence.threshold.toFixed(3)}
+      </div>`;
+  } else {
+    statusEl.innerHTML = `
+      <span style="color:var(--accent)">✓ COHERENT</span>
+      <div style="color:var(--muted);font-size:10px;margin-top:4px">
+        Ξ(a,t) = ${agent.coherence.composite.toFixed(4)}
+        &nbsp;≥&nbsp;
+        Δ(t) = ${agent.coherence.threshold.toFixed(4)}
+        (margin: +${(agent.coherence.composite - agent.coherence.threshold).toFixed(4)})
+      </div>`;
+  }
+}
+
+// ── Silence feed ─────────────────────────────────────────────
+function updateSilenceFeed() {
+  if (!topology) return;
+  const feed = document.getElementById('silence-feed');
+  const silents = topology.agents.filter(a => a.isSilent);
+  document.getElementById('silence-count').textContent = silents.length + ' active';
+
+  if (silents.length === 0) {
+    feed.innerHTML = '<div class="silence-empty">All agents coherent — lattice healthy ✓</div>';
+    return;
+  }
+
+  feed.innerHTML = '';
+  silents.forEach(agent => {
+    const c = agent.coherence;
+    const div = document.createElement('div');
+    div.className = 'silence-item';
+    div.innerHTML = `
+      <span class="silence-agent">${agent.name}</span>
+      <span style="color:var(--muted)"> [${agent.jurisdiction}]</span>
+      <span style="color:var(--muted)"> · Ξ=</span>
+      <span style="color:var(--danger)">${(c?.composite||0).toFixed(3)}</span>
+      <span style="color:var(--muted)"> &lt; Δ=</span>
+      <span style="color:var(--warn)">${(c?.threshold||0).toFixed(3)}</span>
+      ${c?.limitingPlane
+        ? `<br><span class="silence-plane">↳ Limiting: ${c.limitingPlane}</span>`
+        : ''}
+    `;
+    feed.appendChild(div);
+  });
+}
+
+// ── Moat chart ────────────────────────────────────────────────
+function updateMoatChart() {
+  const canvas = document.getElementById('moat-chart');
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+
+  if (moatHistory.length < 2) {
+    ctx.fillStyle = 'var(--muted)';
+    ctx.font = '10px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('Accumulating moat data...', w/2, h/2);
+    return;
+  }
+
+  const max = Math.max(...moatHistory.map(m => m.moat), 0.01);
+  const min = Math.min(...moatHistory.map(m => m.moat), 0);
+
+  // Grid
+  ctx.strokeStyle = '#1e2d3d';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = h * i / 4;
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+  }
+
+  // Gradient fill
+  const grd = ctx.createLinearGradient(0, 0, 0, h);
+  grd.addColorStop(0, '#fbbf2440');
+  grd.addColorStop(1, '#fbbf2400');
+
+  ctx.beginPath();
+  moatHistory.forEach((m, i) => {
+    const x = (i / (moatHistory.length - 1)) * w;
+    const y = h - ((m.moat - min) / (max - min + 0.001)) * (h - 8) - 4;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  });
+  ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.closePath();
+  ctx.fillStyle = grd;
+  ctx.fill();
+
+  // Line
+  ctx.beginPath();
+  moatHistory.forEach((m, i) => {
+    const x = (i / (moatHistory.length - 1)) * w;
+    const y = h - ((m.moat - min) / (max - min + 0.001)) * (h - 8) - 4;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = '#fbbf24';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Latest value label
+  const last = moatHistory[moatHistory.length - 1];
+  ctx.fillStyle = '#fbbf24';
+  ctx.font = '10px monospace';
+  ctx.textAlign = 'right';
+  ctx.fillText('Λ=' + last.moat.toFixed(3), w - 4, 14);
+}
+
+// ── Force-directed lattice graph ──────────────────────────────
+function initNodePositions() {
+  if (!topology) return;
+  topology.agents.forEach((agent, i) => {
+    if (!nodePositions.has(agent.id)) {
+      const angle = (2 * Math.PI * i) / Math.max(1, topology.agents.length) - Math.PI / 2;
+      const r = 150;
+      nodePositions.set(agent.id, {
+        x: 350 + r * Math.cos(angle),
+        y: 220 + r * Math.sin(angle),
+      });
+      nodeVelocities.set(agent.id, { vx: 0, vy: 0 });
+    }
+  });
+}
+
+function updateForces() {
+  if (!topology || topology.agents.length === 0) return;
+
+  const repulsion = 3000;
+  const attraction = 0.01;
+  const damping = 0.85;
+  const center = { x: 350, y: 220 };
+  const gravity = 0.002;
+
+  topology.agents.forEach(a => {
+    const pa = nodePositions.get(a.id);
+    const va = nodeVelocities.get(a.id);
+    if (!pa || !va) return;
+
+    // Gravity toward center
+    va.vx += (center.x - pa.x) * gravity;
+    va.vy += (center.y - pa.y) * gravity;
+
+    // Repulsion from other nodes
+    topology.agents.forEach(b => {
+      if (a.id === b.id) return;
+      const pb = nodePositions.get(b.id);
+      if (!pb) return;
+      const dx = pa.x - pb.x, dy = pa.y - pb.y;
+      const dist = Math.sqrt(dx*dx + dy*dy) || 1;
+      const force = repulsion / (dist * dist);
+      va.vx += (dx / dist) * force;
+      va.vy += (dy / dist) * force;
+    });
+
+    // Attraction along edges
+    topology.edges.forEach(edge => {
+      let other = null;
+      if (edge.from === a.id) other = nodePositions.get(edge.to);
+      else if (edge.to === a.id) other = nodePositions.get(edge.from);
+      if (!other) return;
+      const dx = other.x - pa.x, dy = other.y - pa.y;
+      const dist = Math.sqrt(dx*dx + dy*dy) || 1;
+      const force = dist * attraction * edge.weight;
+      va.vx += (dx / dist) * force;
+      va.vy += (dy / dist) * force;
+    });
+
+    // Apply velocity with damping
+    va.vx *= damping; va.vy *= damping;
+    pa.x = Math.max(40, Math.min(660, pa.x + va.vx));
+    pa.y = Math.max(40, Math.min(400, pa.y + va.vy));
+  });
+}
+
+function drawLattice() {
+  const canvas = document.getElementById('lattice-canvas');
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+
+  // Grid dots
+  ctx.fillStyle = '#1e2d3d44';
+  for (let x = 20; x < w; x += 40) {
+    for (let y = 20; y < h; y += 40) {
+      ctx.beginPath(); ctx.arc(x, y, 1, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  if (!topology || topology.agents.length === 0) {
+    ctx.fillStyle = '#6b7280';
+    ctx.font = '13px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('Waiting for lattice agents...', w/2, h/2 - 10);
+    ctx.font = '11px monospace';
+    ctx.fillText('Click "SPAWN AGENT" to begin', w/2, h/2 + 10);
+    return;
+  }
+
+  initNodePositions();
+  updateForces();
+
+  // Draw edges
+  topology.edges.forEach(edge => {
+    const from = nodePositions.get(edge.from);
+    const to = nodePositions.get(edge.to);
+    if (!from || !to) return;
+
+    const alpha = 0.25 + edge.weight * 0.5;
+    ctx.strokeStyle = `rgba(0,245,196,${alpha})`;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([5, 5]);
+
+    const mx = (from.x + to.x) / 2 - (to.y - from.y) * 0.12;
+    const my = (from.y + to.y) / 2 + (to.x - from.x) * 0.12;
+
+    ctx.beginPath();
+    ctx.moveTo(from.x, from.y);
+    ctx.quadraticCurveTo(mx, my, to.x, to.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Arrowhead
+    const angle = Math.atan2(to.y - my, to.x - mx);
+    ctx.fillStyle = `rgba(0,245,196,${alpha})`;
+    ctx.beginPath();
+    ctx.moveTo(to.x, to.y);
+    ctx.lineTo(to.x - 9 * Math.cos(angle - 0.4), to.y - 9 * Math.sin(angle - 0.4));
+    ctx.lineTo(to.x - 9 * Math.cos(angle + 0.4), to.y - 9 * Math.sin(angle + 0.4));
+    ctx.closePath();
+    ctx.fill();
+
+    // Weight label
+    const lx = (from.x + to.x) / 2;
+    const ly = (from.y + to.y) / 2;
+    ctx.fillStyle = '#00f5c488';
+    ctx.font = '8px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('Ξ=' + edge.weight.toFixed(2), lx, ly);
+  });
+
+  // Draw nodes
+  topology.agents.forEach(agent => {
+    const pos = nodePositions.get(agent.id);
+    if (!pos) return;
+
+    const c = agent.coherence?.composite ?? 0.5;
+    const color = agent.isSilent ? '#ff4d4d'
+                : c >= 0.75 ? '#00f5c4'
+                : c >= 0.60 ? '#ffbb28' : '#f97316';
+
+    const r = 12 + c * 8;
+    const pulse = agent.isSilent ? 0 : Math.sin(frame * 0.03 + pos.x) * 2;
+    const selected = selectedAgentId === agent.id;
+
+    // Outer glow
+    const grd = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, r + 16 + pulse);
+    grd.addColorStop(0, color + '33');
+    grd.addColorStop(1, 'transparent');
+    ctx.fillStyle = grd;
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, r + 16 + pulse, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Node body
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, r + pulse, 0, Math.PI * 2);
+    ctx.fillStyle = color + '1a';
+    ctx.fill();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = selected ? 3 : 2;
+    ctx.stroke();
+
+    // Center dot
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, 4, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+
+    // Selection ring
+    if (selected) {
+      ctx.beginPath();
+      ctx.arc(pos.x, pos.y, r + 6 + pulse, 0, Math.PI * 2);
+      ctx.strokeStyle = color + '88';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 3]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // Labels
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#e2e8f0';
+    ctx.font = '10px monospace';
+    const label = agent.name.length > 14 ? agent.name.slice(0, 14) : agent.name;
+    ctx.fillText(label, pos.x, pos.y + r + 14);
+
+    ctx.fillStyle = color;
+    ctx.font = '9px monospace';
+    ctx.fillText('Ξ=' + (c).toFixed(3), pos.x, pos.y + r + 24);
+
+    if (agent.isSilent) {
+      ctx.fillStyle = '#ff4d4d';
+      ctx.font = '8px monospace';
+      ctx.fillText('⚠ SILENT', pos.x, pos.y + r + 34);
+    }
+
+    // Jurisdiction label above node
+    ctx.fillStyle = '#6b7280';
+    ctx.font = '8px monospace';
+    ctx.fillText(agent.jurisdiction, pos.x, pos.y - r - 6);
+  });
+
+  frame++;
+  requestAnimationFrame(drawLattice);
+}
+
+// ── Event log ─────────────────────────────────────────────────
+function addLog(msg, type = 'info') {
+  const container = document.getElementById('event-log');
+  const div = document.createElement('div');
+  div.className = 'log-item ' + type;
+  div.textContent = new Date().toLocaleTimeString() + ' › ' + msg;
+  container.insertBefore(div, container.firstChild);
+  if (container.children.length > 50) container.removeChild(container.lastChild);
+  eventLog.unshift({ msg, type });
+}
+
+// ── Spawn agent ────────────────────────────────────────────────
+async function spawnAgent() {
+  const btn = document.getElementById('spawn-btn');
+  btn.disabled = true;
+  btn.textContent = 'SPAWNING...';
+  try {
+    const res = await fetch(`${API_URL}/api/v1/agents/spawn`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: `agent-${Date.now().toString(36)}`, mockData: true }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      addLog(`Agent spawned: ${data.agent.did.substring(0, 32)}...`, 'success');
+    } else {
+      addLog('Spawn failed: ' + data.error, 'error');
+    }
+  } catch(e) {
+    addLog('Spawn failed: ' + e.message, 'error');
+  }
+  btn.disabled = false;
+  btn.textContent = '+ SPAWN AGENT';
+}
+
+// ── T3N identity badge polling ────────────────────────────────
+async function checkHealth() {
+  try {
+    const res = await fetch(`${API_URL}/health`);
+    const data = await res.json();
+    const mode = data.teeMode === 'live'
+      ? '<span style="color:var(--accent)">LIVE TEE</span>'
+      : '<span style="color:var(--warn)">MOCK</span>';
+    document.querySelector('.tee-badge').innerHTML = `⚙ TEE: ${mode}`;
+  } catch(e) {}
+}
+
+// ── Start ─────────────────────────────────────────────────────
+connect();
+drawLattice();
+checkHealth();
+setInterval(checkHealth, 30000);
+
+// Add initial log entries
+addLog('KINESIS lattice dashboard initialized', 'success');
+addLog('Connecting to T3N TEE infrastructure...', 'info');
+addLog('Five-plane coherence engine: Π Φ Σ Κ Α', 'info');
+</script>
+</body>
+</html>

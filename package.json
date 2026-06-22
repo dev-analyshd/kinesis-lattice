@@ -8,7 +8,8 @@
     "tests/integration"
   ],
   "scripts": {
-    "bootstrap": "npm install && npm run build:all",
+    "bootstrap": "npm run install:all && npm run build:runtime && npm run build:sdk",
+    "install:all": "cd agent-runtime && npm install && cd ../sdk && npm install && cd ../dashboard && npm install",
     "build:all": "npm run build:contracts && npm run build:runtime && npm run build:sdk",
     "build:contracts": "cd contracts && cargo build --target wasm32-wasip2 --release",
     "build:runtime": "cd agent-runtime && npm run build",
@@ -18,8 +19,9 @@
     "test:contracts": "cd contracts && cargo test",
     "test:runtime": "cd agent-runtime && npm test",
     "test:integration": "cd tests/integration && npm test",
-    "demo": "node -e \"process.env.MOCK_DATA_FOR_DEMO='true'; process.env.DEMO_AGENT_COUNT='5';\" && cd agent-runtime && node dist/index.js",
-    "demo:live": "MOCK_DATA_FOR_DEMO=false cd agent-runtime && node dist/index.js",
+    "demo": "node scripts/demo/run-demo.js",
+    "demo:live": "node scripts/demo/run-demo.js --live",
+    "demo:more": "node scripts/demo/run-demo.js --agents 10",
     "deploy:contracts": "node scripts/deploy/deploy-tee-contracts.js",
     "setup:identity": "node scripts/setup/setup-agent-identity.js",
     "lint": "eslint . --ext .ts,.tsx",

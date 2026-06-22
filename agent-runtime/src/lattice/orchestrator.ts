@@ -298,4 +298,9 @@ export class LatticeOrchestrator {
   getAgentCount(): number { return this.agents.size; }
   getEdgeCount(): number { return this.edges.length; }
   getSilenceLog(): SilenceRecord[] { return this.silenceLog; }
+
+  /** Public broadcast — called by simulation loop to push updates. */
+  broadcastTopologyPublic(): void {
+    this.broadcastTopology();
+  }
 }

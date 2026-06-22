@@ -1,0 +1,8 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "dZxzfleyfUIu1Reqhyzaq"
+uri = "file://artifacts/kinesis-mobile/assets/images/icon.png"
+type = "image"
+title = "kinesis lattice icon"

@@ -1,0 +1,23 @@
+[package]
+name = "kinesis-lattice-contract"
+version = "0.1.0"
+edition = "2021"
+authors = ["KINESIS Team"]
+description = "TEE-verified behavioral coherence and delegation lattice contract"
+license = "MIT"
+
+[dependencies]
+wit-bindgen = "0.30.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sha2 = "0.10"
+hex = "0.4"
+thiserror = "1.0"
+
+[lib]
+crate-type = ["cdylib"]
+
+[profile.release]
+opt-level = 3
+lto = true
+strip = true

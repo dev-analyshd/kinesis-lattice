@@ -1,0 +1,52 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #0a0f1e;
+  --panel: #0f1928;
+  --border: #1e2d3d;
+  --accent: #00f5c4;
+  --accent-dim: #00c49f;
+  --warning: #ffbb28;
+  --danger: #ff4d4d;
+  --muted: #6b7280;
+  --text: #e2e8f0;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+  overflow-x: hidden;
+}
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: var(--panel); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+.coherence-glow {
+  box-shadow: 0 0 20px rgba(0, 245, 196, 0.2);
+}
+
+.silence-glow {
+  box-shadow: 0 0 20px rgba(255, 77, 77, 0.2);
+}
+
+.agent-node-good { fill: #00f5c4; stroke: #00c49f; }
+.agent-node-warning { fill: #ffbb28; stroke: #f59e0b; }
+.agent-node-silent { fill: #ff4d4d; stroke: #dc2626; }
+
+@keyframes latticePulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.lattice-pulse { animation: latticePulse 2s ease-in-out infinite; }

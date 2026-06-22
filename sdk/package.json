@@ -1,0 +1,37 @@
+{
+  "name": "@kinesis/lattice-sdk",
+  "version": "0.1.0",
+  "description": "KINESIS Lattice SDK — Build self-governing agent swarms on Terminal 3 TEE infrastructure",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist", "README.md"],
+  "keywords": ["terminal3", "tee", "agents", "delegation", "coherence", "lattice", "web3", "did"],
+  "scripts": {
+    "build": "tsc",
+    "test": "jest",
+    "lint": "eslint src --ext .ts",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@terminal3/t3n-sdk": "^3.4.4",
+    "ws": "^8.17.0",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.10",
+    "@types/uuid": "^9.0.8",
+    "@types/node": "^20.14.0",
+    "typescript": "^5.4.5",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.4"
+  },
+  "peerDependencies": {
+    "@terminal3/t3n-sdk": "^3.4.4"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dev-analyshd/kinesis-lattice"
+  }
+}

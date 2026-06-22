@@ -1,0 +1,119 @@
+package kinesis:lattice;
+
+interface types {
+  record did {
+    method: string,
+    identifier: string,
+  }
+
+  record coherence-snapshot {
+    agent: did,
+    timestamp: u64,
+    protocol-score: f64,
+    fidelity-score: f64,
+    synergy-score: f64,
+    knowledge-score: f64,
+    adaptivity-score: f64,
+    composite-score: f64,
+    threshold: f64,
+    is-silent: bool,
+    limiting-plane: option<string>,
+    deficit: option<f64>,
+  }
+
+  record delegation-vc {
+    issuer: did,
+    holder: did,
+    issued-at: u64,
+    expires-at: u64,
+    coherence-proof: list<u8>,
+    delegation-rights: list<string>,
+    max-sub-delegations: u8,
+  }
+
+  record silence-record {
+    agent: did,
+    silenced-at: u64,
+    reason: string,
+    limiting-plane: string,
+    deficit: f64,
+    estimated-recovery: u64,
+    remediation-actions: list<string>,
+  }
+
+  record lattice-state {
+    agent-count: u32,
+    total-delegations: u32,
+    active-silences: u32,
+    lattice-moat: f64,
+    volatility-index: f64,
+    last-update: u64,
+  }
+
+  enum plane {
+    protocol,
+    fidelity,
+    synergy,
+    knowledge,
+    adaptivity,
+  }
+
+  variant delegation-result {
+    approved(delegation-vc),
+    rejected(string),
+    pending-review,
+  }
+}
+
+interface lattice-engine {
+  use types.{did, coherence-snapshot, delegation-vc, silence-record, lattice-state, plane, delegation-result};
+
+  init-lattice: func(admin: did) -> result<lattice-state, string>;
+  register-agent: func(agent: did, initial-claims: list<string>) -> result<coherence-snapshot, string>;
+
+  compute-coherence: func(
+    agent: did,
+    protocol-actions: u32,
+    protocol-violations: u32,
+    fidelity-commits: u32,
+    fidelity-fulfilled: u32,
+    synergy-interactions: u32,
+    synergy-positive: u32,
+    knowledge-milestones: u32,
+    knowledge-stagnation-days: u32,
+    adaptivity-shifts: u32,
+    adaptivity-zscore: f64,
+  ) -> result<coherence-snapshot, string>;
+
+  evaluate-delegation: func(
+    delegator: did,
+    delegatee: did,
+  ) -> result<delegation-result, string>;
+
+  revoke-delegation: func(
+    delegator: did,
+    delegatee: did,
+    reason: string,
+  ) -> result<bool, string>;
+
+  enter-silence: func(
+    agent: did,
+    reason: string,
+    limiting-plane: plane,
+    deficit: f64,
+    estimated-recovery: u64,
+  ) -> result<silence-record, string>;
+
+  exit-silence: func(agent: did) -> result<coherence-snapshot, string>;
+
+  get-lattice-state: func() -> result<lattice-state, string>;
+  get-agent-coherence: func(agent: did) -> result<coherence-snapshot, string>;
+  get-silence-registry: func() -> result<list<silence-record>, string>;
+  verify-graph-invariants: func() -> result<bool, string>;
+  compute-lattice-moat: func() -> result<f64, string>;
+}
+
+world kinesis-lattice-world {
+  export lattice-engine;
+  export types;
+}
